@@ -10,16 +10,34 @@
 /*    -Fill vector rhs*/
 void computeRHS(double *rhs, PetscInt rowStart, PetscInt rowEnd){
 
-    //YOU MUST IMPOSE A ZERO-MASS FLOW HERE ...
+  int Nx = theProblem -> Nx;
+  int Ny = theProblem -> Ny;
+  double** u = Mesh -> U;
+  double** v = Mesh -> V;
+  double h = theProblem -> h;
+  double dt = theProblem -> dt;
 
-    int r;
-    for(r=0; r<rowEnd ; r++){
-		    rhs[r] = 5; /*WRITE HERE (nabla dot u_star)/dt at each mesh point r*/
-        /*Do not forget that the solution for the Poisson equation is defined within a constant.
-        One point from Phi must then be set to an abritrary constant.*/
-    }
-    printVec(5,rhs);
+  double IntegralUout;
+  double IntegralUin;
+  for(int j=0;j<Ny;j++){
+       IntegralUin += u[j][1];;
+       IntegralUout += u[j][Nx]
+  }
 
+  cor = (IntegralUin - IntegralUout)/Ny;
+
+  for(int j=0;j<Ny;j++){
+    u[j][Nx] += cor;
+  }
+
+  for(int j=0;j<Ny;j++){
+    for(int i=0;i<Nx;i++){
+        rhs[j*Nx + i] = (h/dt) * (u[j][i+1] - u[j][i] + v[j+1][i] - v[j][i]); /*WRITE HERE (nabla dot u_star)/dt at each mesh point r*/
+         /*Do not forget that the solution for the Poisson equation is defined within a constant.
+         One point from Phi must then be set to an abritrary constant.*/
+       }
+  }
+  rhs[0];
 }
 
 /*To call at each time step after computation of U_star. This function solves the poisson equation*/
@@ -69,20 +87,57 @@ void poisson_solver(Poisson_data *data){
 /*Modification to do in this function : */
 /*   -Insert the correct factor in matrix A*/
 void computeLaplacianMatrix(Mat A, int N_row, int N_col){
+
+    int Nx = theProblem -> Nx;
+    int Ny = theProblem -> Ny;
     double **matjk = matrix(N_row*N_row, N_col*N_col);
-    // int r;
-    for (int i = 0; i < N_row; i++){
-        for (int j = 0; j < N_col; j++) {
-            int index = i + j * N_col;
-            // printf("%d\n", index);
-            MatSetValue(A, index, index, -4.0, INSERT_VALUES);
-            matjk[index][index] = -4.0;
+
+    MatSetValue(A,0,0,1,INSERT_VALUES);
+    MatSetValue(A,Nx,0,1,INSERT_VALUES);
+    for (int r = 1; r < Nx*Ny; r++){
+
+        if (r<Nx-1){
+          MatSetValue(A,r,r,-3,INSERT_VALUES);
+          MatSetValue(A,r,r+1,1,INSERT_VALUES);
+          MatSetValue(A,r,r-1,1,INSERT_VALUES);
         }
+        else if(r==Nx-1){
+          MatSetValue(A,r,r,-2,INSERT_VALUES);
+          MatSetValue(A,r,r-1,1,INSERT_VALUES);
+        }
+
+        else if(r%Nx == 0){
+          if (r == (Nx*Ny)-Nx){
+            MatSetValue(A,r,r,-2,INSERT_VALUES);
+            MatSetValue(A,r,r+1,1,INSERT_VALUES);
+          }
+          else{
+            MatSetValue(A,r,r,-3,INSERT_VALUES);
+            MatSetValue(A,r,r+1,1,INSERT_VALUES);
+          }
+        }
+
+        else if ( (r+1)%Nx == 0){
+          if(r==(Nx*Ny)-1){
+            MatSetValue(A,r,r,-2,INSERT_VALUES);
+            MatSetValue(A,r,r-1,1,INSERT_VALUES);
+          }
+          else{
+            MatSetValue(A,r,r,-3,INSERT_VALUES);
+            MatSetValue(A,r,r-1,1,INSERT_VALUES);
+          }
+        }
+
+        if(r<(Nx*Ny - Nx)){
+          MatSetValue(A,r,r+Nx,1,INSERT_VALUES);
+          MatSetValue(A,r+Nx,r,1,INSERT_VALUES);
+        }
+      }
+
 
         /*USING MATSETVALUE FUNCTION, INSERT THE GOOD FACTOR AT THE GOOD PLACE*/
         /*Be careful; the solution from the system solved is defined within a constant.
         One point from Phi must then be set to an abritrary constant.*/
-    }
     // printMat(N_row*N_row,N_col* N_col, matjk);
 }
 
@@ -96,7 +151,7 @@ PetscErrorCode initialize_poisson_solver(Poisson_data* data){
     PetscInt rowEnd; /*rowEnd = the number of unknows*/
     PetscErrorCode ierr;
 
-	  int nphi = 25; /*WRITE HERE THE NUMBER OF UNKNOWS*/
+	  int nphi = Nx*Ny; /*WRITE HERE THE NUMBER OF UNKNOWS*/
 
     /* Create the right-hand-side vector : b */
     VecCreate(PETSC_COMM_WORLD, &(data->b));
