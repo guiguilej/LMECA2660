@@ -8,36 +8,37 @@
 /*Modification to do :*/
 /*    -Impose zero mass flow here by changing value of U_star*/
 /*    -Fill vector rhs*/
-void computeRHS(double *rhs, PetscInt rowStart, PetscInt rowEnd){
+void computeRHS(double *rhs, PetscInt rowStart, PetscInt rowEnd, Problem* theProblem){
 
   int Nx = theProblem -> Nx;
   int Ny = theProblem -> Ny;
-  double** u = Mesh -> U;
-  double** v = Mesh -> V;
+  Mesh *U = theProblem -> u_star;
+  Mesh *V = theProblem -> v_star;
+  double** u_star = U -> grid;
+  double** v_star = Mesh -> grid;
   double h = theProblem -> h;
   double dt = theProblem -> dt;
 
   double IntegralUout;
   double IntegralUin;
+  double cor;
   for(int j=0;j<Ny;j++){
-       IntegralUin += u[j][1];;
-       IntegralUout += u[j][Nx]
+       IntegralUin += u_star[j][1];
+       IntegralUout += u_star[j][Nx];
   }
 
-  cor = (IntegralUin - IntegralUout)/Ny;
+  cor = (IntegralUin - IntegralUout)/(double)Ny;
 
   for(int j=0;j<Ny;j++){
-    u[j][Nx] += cor;
+    u_star[j][Nx] += cor;
   }
 
   for(int j=0;j<Ny;j++){
     for(int i=0;i<Nx;i++){
-        rhs[j*Nx + i] = (h/dt) * (u[j][i+1] - u[j][i] + v[j+1][i] - v[j][i]); /*WRITE HERE (nabla dot u_star)/dt at each mesh point r*/
-         /*Do not forget that the solution for the Poisson equation is defined within a constant.
-         One point from Phi must then be set to an abritrary constant.*/
+        rhs[j*Nx + i] = (h/dt) * (u_star[j][i+1] - u_star[j][i] + v_star[j+1][i] - v_star[j][i]); 
        }
   }
-  rhs[0];
+  rhs[0]=0;
 }
 
 /*To call at each time step after computation of U_star. This function solves the poisson equation*/
@@ -46,7 +47,7 @@ void computeRHS(double *rhs, PetscInt rowStart, PetscInt rowEnd){
 /*Modification to do :*/
 /*    - Change the call to computeRHS as you have to modify its prototype too*/
 /*    - Copy solution of the equation into your vector PHI*/
-void poisson_solver(Poisson_data *data){
+void poisson_solver(Poisson_data *data, Problem* theProblem){
 
     /* Solve the linear system Ax = b for a 2-D poisson equation on a structured grid */
     int its;
@@ -56,11 +57,12 @@ void poisson_solver(Poisson_data *data){
     KSP sles = data->sles;
     Vec b = data->b;
     Vec x = data->x;
+    double *x_poisson = theProblem -> x_poisson;
 
     /* Fill the right-hand-side vector : b */
     VecGetOwnershipRange(b, &rowStart, &rowEnd);
     VecGetArray(b, &rhs);
-    computeRHS(rhs, rowStart, rowEnd); /*MODIFY THE PROTOTYPE HERE*/
+    computeRHS(rhs, rowStart, rowEnd, Problem* theProblem); /*MODIFY THE PROTOTYPE HERE*/
     VecRestoreArray(b, &rhs);
 
 
@@ -73,7 +75,7 @@ void poisson_solver(Poisson_data *data){
 
     int r;
     for(r=rowStart; r<rowEnd; r++){
-        /*YOUR VECTOR PHI[...]*/ // = sol[r];
+        x_poisson[r] = sol[r];
     }
 
     VecRestoreArray(x, &sol);
@@ -90,10 +92,9 @@ void computeLaplacianMatrix(Mat A, int N_row, int N_col){
 
     int Nx = theProblem -> Nx;
     int Ny = theProblem -> Ny;
-    double **matjk = matrix(N_row*N_row, N_col*N_col);
-
     MatSetValue(A,0,0,1,INSERT_VALUES);
     MatSetValue(A,Nx,0,1,INSERT_VALUES);
+
     for (int r = 1; r < Nx*Ny; r++){
 
         if (r<Nx-1){
