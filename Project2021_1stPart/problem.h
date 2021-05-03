@@ -9,6 +9,8 @@ typedef struct{
     double **grid;
 } Mesh;
 
+
+
 typedef struct{
     double h_hill;
     double H;
@@ -28,15 +30,21 @@ typedef struct{
     double dt;
     double dtau;
     double Re;
+    double t_max;
 
     Mesh *Hx;
     Mesh *Hy;
+
+    Mesh *Hx_old;
+    Mesh *Hy_old;
 
     Mesh *divx;
     Mesh *divy;
 
     Mesh *u;
     Mesh *v;
+    Mesh *u_star;
+    Mesh *v_star;
     Mesh *p;
     Mesh *d1;
     Mesh *d2;
@@ -56,6 +64,7 @@ void boundaryConditions(Problem *theProblem);
 void advective(Problem *theProblem);
 void gradP(Problem *theProblem);
 void diffusive(Problem *theProblem);
+void vorticity(Problem *theProblem);
 void freeMesh(Mesh *mesh);
 void freeProblem(Problem *theProblem);
 

@@ -12,7 +12,7 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->h_hill = h_hill;
     theProblem->H = 4.0 * h_hill;
     theProblem->L = 20.0 * h_hill;
-    theProblem->d_hill = 8.0 * h_hill;
+    theProblem->d_hill = 4.0 * h_hill;
     theProblem->sigma_hill = 3.0 / 2.0 * h_hill;
     theProblem->u_hill = u_hill / 3.6;                                              // [m/s]
 
@@ -22,6 +22,7 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->C = 0.5;
 
     double h = 500;
+    // double h = h_hill / 40.0;
     theProblem->h = h;                                                          // To change later
     int Nx = (int) theProblem->L / theProblem->h;
     int Ny = (int) theProblem->H / theProblem->h;
@@ -33,16 +34,20 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     // which lie on the left hand side boundary
     theProblem->u = initMesh(Nx+1, Ny+2, h);
     theProblem->v = initMesh(Nx+2, Ny+1, h);
+    theProblem->u_star = initMesh(Nx+1, Ny+2, h);
+    theProblem->v_star = initMesh(Nx+2, Ny+1, h);
     theProblem->u_p = initU_p(theProblem);
     theProblem->p = initMesh(Nx, Ny, h);
     theProblem->Hx = initMesh(Nx+1, Ny+2, h);
     theProblem->Hy = initMesh(Nx+2, Ny+1, h);
+    theProblem->Hx_old = initMesh(Nx+1, Ny+2, h);
+    theProblem->Hy_old = initMesh(Nx+2, Ny+1, h);
     theProblem->d1 = initMesh(Nx+1, Ny+1, h);
     theProblem->d2 = initMesh(Nx+1, Ny+1, h);
     theProblem->d3 = initMesh(Nx+1, Ny+1, h);
     theProblem->nu = initMesh(Nx+1, Ny+1, h);
-    theProblem->grad_px = initMesh(Nx+1, Ny+2, h);
-    theProblem->grad_py = initMesh(Nx+2, Ny+1, h);
+    theProblem->grad_px = initMesh(Nx-1, Ny, h);
+    theProblem->grad_py = initMesh(Nx, Ny-1, h);
     theProblem->divx = initMesh(Nx+1, Ny+1, h);
     theProblem->divy = initMesh(Nx+1, Ny+1, h);
     theProblem->w = initMesh(Nx+1, Ny+1, h);
@@ -125,9 +130,13 @@ void freeProblem(Problem *theProblem){
     free(theProblem->u_p);
     freeMesh(theProblem->u);
     freeMesh(theProblem->v);
+    freeMesh(theProblem->u_star);
+    freeMesh(theProblem->v_star);
     freeMesh(theProblem->p);
     freeMesh(theProblem->Hx);
     freeMesh(theProblem->Hy);
+    freeMesh(theProblem->Hx_old);
+    freeMesh(theProblem->Hy_old);
     freeMesh(theProblem->d1);
     freeMesh(theProblem->d2);
     freeMesh(theProblem->d3);
@@ -195,15 +204,15 @@ void gradP(Problem *theProblem){
     double h = theProblem->h;
 
     // Computing grad_px
-    for(int j = 1; j < P->Ny; j++){
-        for(int i = 1; i < P->Nx; i++){
+    for(int j = 0; j < Grad_px->Ny; j++){
+        for(int i = 0; i < Grad_px->Nx; i++){
             grad_px[j][i] = (p[j][i+1] - p[j][i]) / h;
         }
     }
 
     // Computing grad_py
-    for(int j = 1; j < P->Ny; j++){
-        for(int i = 1; i < P->Nx; i++){
+    for(int j = 0; j < Grad_py->Ny; j++){
+        for(int i = 0; i < Grad_py->Nx; i++){
             grad_py[j][i] = (p[j+1][i] - p[j][i]) / h;
         }
     }
@@ -299,6 +308,27 @@ void diffusive(Problem *theProblem){
 
             divx[j][i] = nu[j][i] * (dd1dx + dd2dx) + (d1[j][i] + d2[j][i]) * dnudx;
             divy[j][i] = nu[j][i] * (dd2dy + dd3dy) + (d2[j][i] + d3[j][i]) * dnudy;
+        }
+    }
+}
+
+void vorticity(Problem *theProblem){
+    Mesh *U = theProblem->u;
+    Mesh *V = theProblem->v;
+    Mesh *W = theProblem->w;
+
+    double **u = U->grid;
+    double **v = V->grid;
+    double **w = W->grid;
+
+    double dvdx;
+    double dudy;
+
+    for(int j = 0; j < theProblem->nu->Ny; j++){
+        for(int i = 0; i < theProblem->nu->Nx; i++){
+            dvdx = (v[j][i+1] - v[j][i]) / theProblem->h;
+            dudy = (u[j+1][i] - u[j][i]) / theProblem->h;
+            w[j][i] = dvdx - dudy;
         }
     }
 }
