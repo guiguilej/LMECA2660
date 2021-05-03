@@ -35,7 +35,7 @@ void printMat(int Nx, int Ny, double **mat){
 }
 
 void saveProblem(Problem *theProblem, char *filename){
-    printf("Writing in file: %s\n", filename);
+
     FILE *file = fopen(filename, "w");
     fprintf(file, "%.10f\n", theProblem->h);
     fprintf(file, "%.10f\n", theProblem->H);
@@ -51,10 +51,10 @@ void saveProblem(Problem *theProblem, char *filename){
     fclose(file);
 }
 
-void saveMat(int Nx, int Ny, double **mat, char *name){
-    char *basename = "/mnt/d/cours/Q8/LMECA2660/Project/Data/Results_%s.txt";
-    char filename[50];
-    sprintf(filename, basename, name);
+void saveMat(int Nx, int Ny, double **mat, char *name, int it){
+    char *basename = "/mnt/d/cours/Q8/LMECA2660/Project/Data/Results/%s_%d.txt";
+    char filename[100];
+    sprintf(filename, basename, name, it);
     printf("Writing in file: %s\n", filename);
     FILE *file = fopen(filename, "w");
     for(int i = 0; i < Ny; i++){
@@ -64,4 +64,18 @@ void saveMat(int Nx, int Ny, double **mat, char *name){
         fprintf(file, "\n");
     }
     fclose(file);
+}
+
+void vecToMat(Mesh *mesh, double *vec){
+    double **grid = mesh->grid;
+    int Ny = mesh->Ny;
+    int Nx = mesh->Nx;
+    int index = 0;
+
+    for(int j = 0; j < Ny; j++){
+        for(int i = 0; i < Nx; i++){
+            index = j + Nx * i;
+            grid[j][i] = vec[index];
+        }
+    }
 }

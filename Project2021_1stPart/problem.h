@@ -24,6 +24,7 @@ typedef struct{
     double C;
     int Nx;
     int Ny;
+    int it;
     double h;
     double *u_p;
 
@@ -31,6 +32,8 @@ typedef struct{
     double dtau;
     double Re;
     double t_max;
+
+    double massFlow;
 
     Mesh *Hx;
     Mesh *Hy;
@@ -46,6 +49,7 @@ typedef struct{
     Mesh *u_star;
     Mesh *v_star;
     Mesh *p;
+    Mesh *phi;
     Mesh *d1;
     Mesh *d2;
     Mesh *d3;
@@ -53,6 +57,8 @@ typedef struct{
     Mesh *w;
     Mesh *grad_px;
     Mesh *grad_py;
+    Mesh *grad_phix;
+    Mesh *grad_phiy;
 } Problem;
 
 
@@ -61,8 +67,10 @@ Mesh *initMesh(int Nx, int Ny, double h);
 void initialCondition(Problem *theProblem);
 double *initU_p(Problem *theProblem);
 void boundaryConditions(Problem *theProblem);
+void outFlow(Problem *theProblem);
 void advective(Problem *theProblem);
 void gradP(Problem *theProblem);
+void gradPhi(Problem *theProblem);
 void diffusive(Problem *theProblem);
 void vorticity(Problem *theProblem);
 void freeMesh(Mesh *mesh);

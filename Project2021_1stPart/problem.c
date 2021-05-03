@@ -38,6 +38,7 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->v_star = initMesh(Nx+2, Ny+1, h);
     theProblem->u_p = initU_p(theProblem);
     theProblem->p = initMesh(Nx, Ny, h);
+    theProblem->phi = initMesh(Nx, Ny, h);
     theProblem->Hx = initMesh(Nx+1, Ny+2, h);
     theProblem->Hy = initMesh(Nx+2, Ny+1, h);
     theProblem->Hx_old = initMesh(Nx+1, Ny+2, h);
@@ -48,6 +49,8 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->nu = initMesh(Nx+1, Ny+1, h);
     theProblem->grad_px = initMesh(Nx-1, Ny, h);
     theProblem->grad_py = initMesh(Nx, Ny-1, h);
+    theProblem->grad_phix = initMesh(Nx-1, Ny, h);
+    theProblem->grad_phiy = initMesh(Nx, Ny-1, h);
     theProblem->divx = initMesh(Nx+1, Ny+1, h);
     theProblem->divy = initMesh(Nx+1, Ny+1, h);
     theProblem->w = initMesh(Nx+1, Ny+1, h);
@@ -59,13 +62,11 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
 double *initU_p(Problem *theProblem){
     double *u_p = calloc(theProblem->u->Ny, sizeof(double));
     double h = theProblem->h;
-    // printf("%d\n", theProblem->u->Ny);
-    // printf("%d\n", theProblem->u->Nx);
     for(int j = 1; j < theProblem->u->Ny - 1; j++){
-            double y = h / 2.0 + (j - 1) * h;
-            //printf("%f\n", y);
-            u_p[j] = theProblem->u_tau / theProblem->kappa * log((y + theProblem->y0) / theProblem->y0);
-        }
+        double y = h / 2.0 + (j - 1) * h;
+        u_p[j] = theProblem->u_tau / theProblem->kappa * log((y + theProblem->y0) / theProblem->y0);
+        theProblem->massFlow += u_p[j] * h;
+    }
     return u_p;
 }
 
@@ -133,6 +134,7 @@ void freeProblem(Problem *theProblem){
     freeMesh(theProblem->u_star);
     freeMesh(theProblem->v_star);
     freeMesh(theProblem->p);
+    freeMesh(theProblem->phi);
     freeMesh(theProblem->Hx);
     freeMesh(theProblem->Hy);
     freeMesh(theProblem->Hx_old);
@@ -143,6 +145,8 @@ void freeProblem(Problem *theProblem){
     freeMesh(theProblem->nu);
     freeMesh(theProblem->grad_px);
     freeMesh(theProblem->grad_py);
+    freeMesh(theProblem->grad_phix);
+    freeMesh(theProblem->grad_phiy);
     freeMesh(theProblem->divx);
     freeMesh(theProblem->divy);
     freeMesh(theProblem->w);
@@ -218,6 +222,32 @@ void gradP(Problem *theProblem){
     }
 }
 
+void gradPhi(Problem *theProblem){
+
+    Mesh *Phi = theProblem->phi;
+    Mesh *Grad_phix = theProblem->grad_phix;
+    Mesh *Grad_phiy = theProblem->grad_phiy;
+
+    double **phi = Phi->grid;
+    double **grad_phix = Grad_phix->grid;
+    double **grad_phiy = Grad_phiy->grid;
+
+    double h = theProblem->h;
+
+    // Computing grad_phix
+    for(int j = 0; j < Grad_phix->Ny; j++){
+        for(int i = 0; i < Grad_phix->Nx; i++){
+            grad_phix[j][i] = (phi[j][i+1] - phi[j][i]) / h;
+        }
+    }
+
+    // Computing grad_phiy
+    for(int j = 0; j < Grad_phiy->Ny; j++){
+        for(int i = 0; i < Grad_phiy->Nx; i++){
+            grad_phiy[j][i] = (phi[j+1][i] - phi[j][i]) / h;
+        }
+    }
+}
 
 void diffusive(Problem *theProblem){
     Mesh *U = theProblem->u;
@@ -330,5 +360,32 @@ void vorticity(Problem *theProblem){
             dudy = (u[j+1][i] - u[j][i]) / theProblem->h;
             w[j][i] = dvdx - dudy;
         }
+    }
+}
+
+void outFlow(Problem *theProblem){
+    Mesh *U = theProblem->u_star;
+    Mesh *U_star = theProblem->u_star;
+
+    double **u = U->grid;
+    double **u_star = U_star->grid;
+    double *u_p = theProblem->u_p;
+
+    int Ny = U->Ny;
+    int Nx = U->Nx;
+    // Applies the right border boudary condition (equation 6))
+    for(int j = 0; j < Ny; j++){
+        u_star[j][Nx-1] = u[j][Nx-1] - theProblem->dt / theProblem->h * u_p[j] * (u[j][Nx-1] - u[j][Nx-2]);
+    }
+
+    // Computes the massflow at the outlet and corrects and spreads the excess over all uelocities
+    double massFlowIn = theProblem->massFlow;
+    double massFlowOut = 0.0;
+    for(int j = 0; j < Ny; j++){
+        massFlowOut += u_star[j][Nx-1] * theProblem->h;
+    }
+
+    for(int j = 0; j < Ny; j++){
+        u_star[j][Nx-1] -= (massFlowOut - massFlowIn) / theProblem->H;
     }
 }
