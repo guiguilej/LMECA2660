@@ -29,6 +29,9 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->Nx = Nx;
     theProblem->Ny = Ny;
 
+    double *rhs = (double*) calloc(Nx * Ny, sizeof(double));
+    theProblem->rhs = rhs;
+    
     // For u and v, the first point of the mesh corresponds to the u and v which  get in the first cell
     // The addidtional points (of index 0) are thus the v's which lie on the bottom boundary and the u's
     // which lie on the left hand side boundary
@@ -60,7 +63,7 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
 }
 
 double *initU_p(Problem *theProblem){
-    double *u_p = calloc(theProblem->u->Ny, sizeof(double));
+    double *u_p = (double *) calloc(theProblem->u->Ny, sizeof(double));
     double h = theProblem->h;
     for(int j = 1; j < theProblem->u->Ny - 1; j++){
         double y = h / 2.0 + (j - 1) * h;
@@ -373,7 +376,7 @@ void outFlow(Problem *theProblem){
 
     int Ny = U->Ny;
     int Nx = U->Nx;
-    // Applies the right border boudary condition (equation 6))
+    // Applies the right border boundary condition (equation 6))
     for(int j = 0; j < Ny; j++){
         u_star[j][Nx-1] = u[j][Nx-1] - theProblem->dt / theProblem->h * u_p[j] * (u[j][Nx-1] - u[j][Nx-2]);
     }

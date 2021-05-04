@@ -9,7 +9,7 @@
 //Structure storing petsc vectors
 
 typedef struct {
-	
+
 	Vec b;
 	Vec x;
 	Mat A;
@@ -17,8 +17,10 @@ typedef struct {
 
 } Poisson_data;
 
-PetscErrorCode initialize_poisson_solver(Poisson_data* data);
-void poisson_solver(Poisson_data *data);
+PetscErrorCode initialize_poisson_solver(Poisson_data* data, Problem *theProblem);
+void poisson_solver(Poisson_data *data, Problem *theProblem);
 void free_poisson_solver(Poisson_data* data);
+void computeRHS(double *rhs, Problem* theProblem);
+void computeLaplacianMatrix(Mat A, Problem *theProblem);
 
 #endif

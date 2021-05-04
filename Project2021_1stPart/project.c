@@ -7,9 +7,6 @@
 int main(int argc, char *argv[]){
     char *fileProblem = "/mnt/d/cours/Q8/LMECA2660/Project/Data/problem.txt";
     Poisson_data poisson_data;
-    PetscInitialize(&argc, &argv, 0, 0);
-    initialize_poisson_solver(&poisson_data);
-
 
     double h_hill = 500.0;
     double u_hill = 50.0;
@@ -22,6 +19,8 @@ int main(int argc, char *argv[]){
 
     Problem *theProblem;
     theProblem = initProblem(h_hill, u_hill, y0);
+    PetscInitialize(&argc, &argv, 0, 0);
+    initialize_poisson_solver(&poisson_data, theProblem);
 
     Mesh *U = theProblem->u;
     Mesh *V = theProblem->v;
@@ -36,11 +35,14 @@ int main(int argc, char *argv[]){
     Mesh *Divy = theProblem->divy;
     Mesh *Grad_px = theProblem->grad_px;
     Mesh *Grad_py = theProblem->grad_py;
+    Mesh *P = theProblem->p;
+    Mesh *Phi = theProblem->phi;
+    Mesh *Grad_phix = theProblem->grad_phix;
+    Mesh *Grad_phiy = theProblem->grad_phiy;
 
 
     double **u = U->grid;
     double **v = V->grid;
-
     double **u_star = U_star->grid;
     double **v_star = V_star->grid;
     double **hx = Hx->grid;
@@ -51,16 +53,11 @@ int main(int argc, char *argv[]){
     double **divy = Divy->grid;
     double **grad_px = Grad_px->grid;
     double **grad_py = Grad_py->grid;
-
-
-    Mesh *P = theProblem->p;
-    Mesh *Phi = theProblem->phi;
-    Mesh *Grad_phix = theProblem->grad_phix;
-    Mesh *Grad_phiy = theProblem->grad_phiy;
     double **p = P->grid;
     double **phi = Phi->grid;
     double **grad_phix = Grad_phix->grid;
     double **grad_phiy = Grad_phiy->grid;
+
 
     saveProblem(theProblem, fileProblem);
     // printf("%f\n", theProblem->u_tau);
@@ -92,14 +89,16 @@ int main(int argc, char *argv[]){
         }
     }
 
+    computeRHS(theProblem->rhs, theProblem);
     // Applies the right border boundary condition then applies the correction
     // on the outlet uelocity to keep a constant massflow
-    outFlow(theProblem);
+    // outFlow(theProblem);
 
     // Solving the Poisson equation
     // Insert poisson solver here
-
-    // vecToMat(Phi, x);  x is the solution of the poisson equation
+    poisson_solver(&poisson_data, theProblem);
+    printf("%s\n", "hey");
+    vecToMat(Phi, theProblem->x_poisson);  // x is the solution of the poisson equation
 
     // Computing grad_phi then updating v_n+1
     gradPhi(theProblem);
@@ -156,14 +155,17 @@ int main(int argc, char *argv[]){
             }
         }
 
+        computeRHS(theProblem->rhs, theProblem);
+
         // Applies the right border boundary condition then applies the correction
         // on the outlet uelocity to keep a constant massflow
-        outFlow(theProblem);
+        // outFlow(theProblem);
 
         // Solving the Poisson equation
         // Insert poisson solver here
+        poisson_solver(&poisson_data, theProblem);
 
-        // vecToMat(Phi, x);  x is the solution of the poisson equation
+        vecToMat(Phi, theProblem->x_poisson);  // x is the solution of the poisson equation
 
         // Computing grad_phi then updating v_n+1
         gradPhi(theProblem);
@@ -188,21 +190,21 @@ int main(int argc, char *argv[]){
         }
         if(it % 10 == 0){
             vorticity(theProblem);
-            saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", it);
-            saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", it);
-            saveMat(theProblem->Hx->Nx, theProblem->Hx->Ny, theProblem->Hx->grid, "Hx", it);
-            saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", it);
+            // saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", it);
+            // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", it);
+            // saveMat(theProblem->Hx->Nx, theProblem->Hx->Ny, theProblem->Hx->grid, "Hx", it);
+            // saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", it);
             saveMat(theProblem->nu->Nx, theProblem->nu->Ny, theProblem->nu->grid, "w", it);
         }
     }
 
-    saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", theProblem->it);
-    saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", theProblem->it);
-    saveMat(theProblem->Hx->Nx, theProblem->Hx->Ny, theProblem->Hx->grid, "Hx", theProblem->it);
-    saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", theProblem->it);
+    // saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", theProblem->it);
+    // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", theProblem->it);
+    // saveMat(theProblem->Hx->Nx, theProblem->Hx->Ny, theProblem->Hx->grid, "Hx", theProblem->it);
+    // saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", theProblem->it);
     saveMat(theProblem->nu->Nx, theProblem->nu->Ny, theProblem->nu->grid, "w", theProblem->it);
     freeProblem(theProblem);
 
-    // PetscFinalize();
+    PetscFinalize();
 
 }

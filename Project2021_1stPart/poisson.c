@@ -1,25 +1,45 @@
-
 // #include <mpi.h>
+#include "problem.h"
 #include "poisson.h"
 #include "usefull.h"
+
 
 /*Called by poisson_solver at each time step*/
 /*More than probably, you should need to add arguments to the prototype ... */
 /*Modification to do :*/
 /*    -Impose zero mass flow here by changing value of U_star*/
 /*    -Fill vector rhs*/
-void computeRHS(double *rhs, PetscInt rowStart, PetscInt rowEnd){
+void computeRHS(double *rhs, Problem* theProblem){
 
-    //YOU MUST IMPOSE A ZERO-MASS FLOW HERE ...
+    int Nx = theProblem -> Nx;
+    int Ny = theProblem -> Ny;
+    Mesh *U_star = theProblem -> u_star;
+    Mesh *V_star = theProblem -> v_star;
+    double** u_star = U_star -> grid;
+    double** v_star = V_star -> grid;
+    double h = theProblem -> h;
+    double dt = theProblem -> dt;
 
-    int r;
-    for(r=0; r<rowEnd ; r++){
-		    rhs[r] = 5; /*WRITE HERE (nabla dot u_star)/dt at each mesh point r*/
-        /*Do not forget that the solution for the Poisson equation is defined within a constant.
-        One point from Phi must then be set to an abritrary constant.*/
+    double IntegralUout;
+    double IntegralUin;
+    double cor;
+    for(int j = 0; j < U_star->Ny;j++){
+         IntegralUin += u_star[j][0];
+         IntegralUout += u_star[j][U_star->Nx-1];
     }
-    printVec(5,rhs);
+    cor = (IntegralUin - IntegralUout)/(double)Ny;
 
+    for(int j = 0; j < U_star->Ny; j++){
+      u_star[j][U_star->Nx-1] += cor;
+    }
+
+
+    for(int j = 0; j < Ny-1; j++){
+        for(int i = 0; i < Nx-1; i++){
+            rhs[j*Nx + i] = (h / dt) * (u_star[j][i+1] - u_star[j][i] + v_star[j+1][i] - v_star[j][i]);
+        }
+    }
+    rhs[0]=0;
 }
 
 /*To call at each time step after computation of U_star. This function solves the poisson equation*/
@@ -28,7 +48,7 @@ void computeRHS(double *rhs, PetscInt rowStart, PetscInt rowEnd){
 /*Modification to do :*/
 /*    - Change the call to computeRHS as you have to modify its prototype too*/
 /*    - Copy solution of the equation into your vector PHI*/
-void poisson_solver(Poisson_data *data){
+void poisson_solver(Poisson_data *data, Problem* theProblem){
 
     /* Solve the linear system Ax = b for a 2-D poisson equation on a structured grid */
     int its;
@@ -38,11 +58,12 @@ void poisson_solver(Poisson_data *data){
     KSP sles = data->sles;
     Vec b = data->b;
     Vec x = data->x;
+    double *x_poisson = theProblem -> x_poisson;
 
     /* Fill the right-hand-side vector : b */
     VecGetOwnershipRange(b, &rowStart, &rowEnd);
     VecGetArray(b, &rhs);
-    computeRHS(rhs, rowStart, rowEnd); /*MODIFY THE PROTOTYPE HERE*/
+    computeRHS(rhs, theProblem); /*MODIFY THE PROTOTYPE HERE*/
     VecRestoreArray(b, &rhs);
 
 
@@ -55,7 +76,7 @@ void poisson_solver(Poisson_data *data){
 
     int r;
     for(r=rowStart; r<rowEnd; r++){
-        /*YOUR VECTOR PHI[...]*/ // = sol[r];
+        x_poisson[r] = sol[r];
     }
 
     VecRestoreArray(x, &sol);
@@ -68,21 +89,56 @@ void poisson_solver(Poisson_data *data){
 /*More than probably, you should need to add arguments to the prototype ... .*/
 /*Modification to do in this function : */
 /*   -Insert the correct factor in matrix A*/
-void computeLaplacianMatrix(Mat A, int N_row, int N_col){
-    double **matjk = matrix(N_row*N_row, N_col*N_col);
-    // int r;
-    for (int i = 0; i < N_row; i++){
-        for (int j = 0; j < N_col; j++) {
-            int index = i + j * N_col;
-            // printf("%d\n", index);
-            MatSetValue(A, index, index, -4.0, INSERT_VALUES);
-            matjk[index][index] = -4.0;
+void computeLaplacianMatrix(Mat A, Problem *theProblem){
+
+    int Nx = theProblem -> Nx;
+    int Ny = theProblem -> Ny;
+    MatSetValue(A,0,0,1,INSERT_VALUES);
+    MatSetValue(A,Nx,0,1,INSERT_VALUES);
+
+    for (int r = 1; r < Nx*Ny; r++){
+        if (r<Nx-1){
+            MatSetValue(A,r,r,-3,INSERT_VALUES);
+            MatSetValue(A,r,r+1,1,INSERT_VALUES);
+            MatSetValue(A,r,r-1,1,INSERT_VALUES);
         }
+        else if(r==Nx-1){
+            MatSetValue(A,r,r,-2,INSERT_VALUES);
+            MatSetValue(A,r,r-1,1,INSERT_VALUES);
+        }
+
+        else if(r%Nx == 0){
+            if (r == (Nx*Ny)-Nx){
+                MatSetValue(A,r,r,-2,INSERT_VALUES);
+                MatSetValue(A,r,r+1,1,INSERT_VALUES);
+            }
+            else{
+                MatSetValue(A,r,r,-3,INSERT_VALUES);
+                MatSetValue(A,r,r+1,1,INSERT_VALUES);
+            }
+        }
+
+        else if ( (r+1)%Nx == 0){
+            if(r==(Nx*Ny)-1){
+                MatSetValue(A,r,r,-2,INSERT_VALUES);
+                MatSetValue(A,r,r-1,1,INSERT_VALUES);
+            }
+            else{
+                MatSetValue(A,r,r,-3,INSERT_VALUES);
+                MatSetValue(A,r,r-1,1,INSERT_VALUES);
+            }
+        }
+
+        if(r<(Nx*Ny - Nx)){
+            MatSetValue(A,r,r+Nx,1,INSERT_VALUES);
+            MatSetValue(A,r+Nx,r,1,INSERT_VALUES);
+        }
+    }
+
 
         /*USING MATSETVALUE FUNCTION, INSERT THE GOOD FACTOR AT THE GOOD PLACE*/
         /*Be careful; the solution from the system solved is defined within a constant.
         One point from Phi must then be set to an abritrary constant.*/
-    }
     // printMat(N_row*N_row,N_col* N_col, matjk);
 }
 
@@ -91,12 +147,12 @@ void computeLaplacianMatrix(Mat A, int N_row, int N_col){
 /*Modification to do in this function :*/
 /*   -Specify the number of unknows*/
 /*   -Specify the number of non-zero diagonals in the sparse matrix*/
-PetscErrorCode initialize_poisson_solver(Poisson_data* data){
+PetscErrorCode initialize_poisson_solver(Poisson_data* data, Problem *theProblem){
     PetscInt rowStart; /*rowStart = 0*/
     PetscInt rowEnd; /*rowEnd = the number of unknows*/
     PetscErrorCode ierr;
 
-	  int nphi = 25; /*WRITE HERE THE NUMBER OF UNKNOWS*/
+	  int nphi = theProblem->Nx * theProblem->Ny; /*WRITE HERE THE NUMBER OF UNKNOWS*/
 
     /* Create the right-hand-side vector : b */
     VecCreate(PETSC_COMM_WORLD, &(data->b));
@@ -115,11 +171,13 @@ PetscErrorCode initialize_poisson_solver(Poisson_data* data){
     MatSeqAIJSetPreallocation(data->A,5, NULL); // /*SET HERE THE NUMBER OF NON-ZERO DIAGONALS*/
     MatGetOwnershipRange(data->A, &rowStart, &rowEnd);
 
-    computeLaplacianMatrix(data->A, 5, 5);
+    computeLaplacianMatrix(data->A, theProblem);
     ierr = MatAssemblyBegin(data->A, MAT_FINAL_ASSEMBLY);
+
     CHKERRQ(ierr);
     ierr = MatAssemblyEnd(data->A, MAT_FINAL_ASSEMBLY);
     CHKERRQ(ierr);
+    MatView(data->A,PETSC_VIEWER_STDOUT_WORLD);
 
     /* Create the Krylov context */
     KSPCreate(PETSC_COMM_WORLD, &(data->sles));

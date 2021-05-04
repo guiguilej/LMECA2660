@@ -27,6 +27,8 @@ typedef struct{
     int it;
     double h;
     double *u_p;
+    double *rhs;
+    double *x_poisson;
 
     double dt;
     double dtau;
