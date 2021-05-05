@@ -66,6 +66,25 @@ void saveMat(int Nx, int Ny, double **mat, char *name, int it){
     fclose(file);
 }
 
+void saveMatTest(int Nx, int Ny, double **mat){
+    char *filename = "/mnt/d/cours/Q8/LMECA2660/Project/Data/mat.txt";
+    printf("Writing in file: %s\n", filename);
+    FILE *file = fopen(filename, "w");
+    for(int i = 0; i < Ny; i++){
+        for(int j = 0; j <Nx; j++){
+            double val = mat[i][j];
+            if(val == 0){
+                fprintf(file, "%s", "  ");
+            }
+            else{
+                fprintf(file, "%.1f ", val);
+            }
+        }
+        fprintf(file, "  %d \n", i+1);
+    }
+    fclose(file);
+}
+
 void vecToMat(Mesh *mesh, double *vec){
     double **grid = mesh->grid;
     int Ny = mesh->Ny;
@@ -73,8 +92,9 @@ void vecToMat(Mesh *mesh, double *vec){
     int index = 0;
 
     for(int j = 0; j < Ny; j++){
+        // printf("%d\n", j);
         for(int i = 0; i < Nx; i++){
-            index = j + Nx * i;
+            index = j * Nx + i;
             grid[j][i] = vec[index];
         }
     }

@@ -11,16 +11,19 @@ int main(int argc, char *argv[]){
     double h_hill = 500.0;
     double u_hill = 50.0;
     double y0 = 0.1;
-    double t_max = 3.0;
-    double dt = 0.01;
-    int n_iter = (int)(t_max / dt);
+    // double t_max = 3.0;
+    double dt = 0.0001;
+    // int n_iter = (int)(t_max / dt);
+    int n_iter = 50;
     // double Re = 100000000;
 
 
     Problem *theProblem;
     theProblem = initProblem(h_hill, u_hill, y0);
+    theProblem->dt = dt;
     PetscInitialize(&argc, &argv, 0, 0);
     initialize_poisson_solver(&poisson_data, theProblem);
+    printf("%s\n", "Poisson solver initialised");
 
     Mesh *U = theProblem->u;
     Mesh *V = theProblem->v;
@@ -60,9 +63,7 @@ int main(int argc, char *argv[]){
 
 
     saveProblem(theProblem, fileProblem);
-    // printf("%f\n", theProblem->u_tau);
     initialCondition(theProblem);
-
 
     // First iteration using a EE2 scheme for the advective term
 
@@ -89,7 +90,8 @@ int main(int argc, char *argv[]){
         }
     }
 
-    computeRHS(theProblem->rhs, theProblem);
+
+    // computeRHS(theProblem->rhs, theProblem);
     // Applies the right border boundary condition then applies the correction
     // on the outlet uelocity to keep a constant massflow
     // outFlow(theProblem);
@@ -97,9 +99,8 @@ int main(int argc, char *argv[]){
     // Solving the Poisson equation
     // Insert poisson solver here
     poisson_solver(&poisson_data, theProblem);
-    printf("%s\n", "hey");
     vecToMat(Phi, theProblem->x_poisson);  // x is the solution of the poisson equation
-
+    printf("%s\n", "Hey");
     // Computing grad_phi then updating v_n+1
     gradPhi(theProblem);
 
@@ -155,7 +156,7 @@ int main(int argc, char *argv[]){
             }
         }
 
-        computeRHS(theProblem->rhs, theProblem);
+        // computeRHS(theProblem->rhs, theProblem);
 
         // Applies the right border boundary condition then applies the correction
         // on the outlet uelocity to keep a constant massflow
@@ -190,7 +191,7 @@ int main(int argc, char *argv[]){
         }
         if(it % 10 == 0){
             vorticity(theProblem);
-            // saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", it);
+            saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", it);
             // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", it);
             // saveMat(theProblem->Hx->Nx, theProblem->Hx->Ny, theProblem->Hx->grid, "Hx", it);
             // saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", it);

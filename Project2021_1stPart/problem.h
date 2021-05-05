@@ -77,5 +77,6 @@ void diffusive(Problem *theProblem);
 void vorticity(Problem *theProblem);
 void freeMesh(Mesh *mesh);
 void freeProblem(Problem *theProblem);
+void mask(Problem *theProblem);
 
 #endif

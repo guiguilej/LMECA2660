@@ -39,6 +39,7 @@ void computeRHS(double *rhs, Problem* theProblem){
             rhs[j*Nx + i] = (h / dt) * (u_star[j][i+1] - u_star[j][i] + v_star[j+1][i] - v_star[j][i]);
         }
     }
+
     rhs[0]=0;
 }
 
@@ -66,16 +67,17 @@ void poisson_solver(Poisson_data *data, Problem* theProblem){
     computeRHS(rhs, theProblem); /*MODIFY THE PROTOTYPE HERE*/
     VecRestoreArray(b, &rhs);
 
-
     /*Solve the linear system of equations */
     KSPSolve(sles, b, x);
+    // VecView(x, PETSC_VIEWER_STDOUT_WORLD);
     KSPGetIterationNumber(sles, &its);
-    PetscPrintf(PETSC_COMM_WORLD, "Solution to Poisson eqn in %d iterations \n", its);
 
+    PetscPrintf(PETSC_COMM_WORLD, "Solution to Poisson eqn in %d iterations \n", its);
     VecGetArray(x, &sol);
+    // printf("%s\n", "hey");
 
     int r;
-    for(r=rowStart; r<rowEnd; r++){
+    for(r=0; r<theProblem->Nx*theProblem->Ny; r++){
         x_poisson[r] = sol[r];
     }
 
@@ -93,22 +95,30 @@ void computeLaplacianMatrix(Mat A, Problem *theProblem){
 
     int Nx = theProblem -> Nx;
     int Ny = theProblem -> Ny;
-    MatSetValue(A,0,0,1,INSERT_VALUES);
+    MatSetValue(A,0,0,1,INSERT_VALUES); // Bottom left corner
     MatSetValue(A,Nx,0,1,INSERT_VALUES);
 
-    for (int r = 1; r < Nx*Ny; r++){
-        if (r<Nx-1){
+    MatSetValue(A,Nx*Ny-1,Nx*Ny-1,-2,INSERT_VALUES);
+    MatSetValue(A,Nx*Ny-1,Nx*Ny-2,1,INSERT_VALUES);
+
+    for (int r = 1; r < Nx*Ny - 1; r++){
+        MatSetValue(A,r,r,-4,INSERT_VALUES);
+        MatSetValue(A,r,r+1,1,INSERT_VALUES);
+        MatSetValue(A,r,r-1,1,INSERT_VALUES);
+
+        if (r<Nx-1){ // Bottom boundary
             MatSetValue(A,r,r,-3,INSERT_VALUES);
             MatSetValue(A,r,r+1,1,INSERT_VALUES);
             MatSetValue(A,r,r-1,1,INSERT_VALUES);
         }
-        else if(r==Nx-1){
+        else if(r==Nx-1){ // Bottom right corner
             MatSetValue(A,r,r,-2,INSERT_VALUES);
             MatSetValue(A,r,r-1,1,INSERT_VALUES);
+            MatSetValue(A,r,r+1,0,INSERT_VALUES);
         }
 
-        else if(r%Nx == 0){
-            if (r == (Nx*Ny)-Nx){
+        else if(r%Nx == 0){ // Left boundary
+            if (r == (Nx*Ny)-Nx){ // Top left corner corner
                 MatSetValue(A,r,r,-2,INSERT_VALUES);
                 MatSetValue(A,r,r+1,1,INSERT_VALUES);
             }
@@ -118,8 +128,8 @@ void computeLaplacianMatrix(Mat A, Problem *theProblem){
             }
         }
 
-        else if ( (r+1)%Nx == 0){
-            if(r==(Nx*Ny)-1){
+        else if ((r+1)%Nx == 0){ // Right boundary
+            if(r==(Nx*Ny)-1){ // Top right corner
                 MatSetValue(A,r,r,-2,INSERT_VALUES);
                 MatSetValue(A,r,r-1,1,INSERT_VALUES);
             }
@@ -129,17 +139,18 @@ void computeLaplacianMatrix(Mat A, Problem *theProblem){
             }
         }
 
+        if(r > (Nx*Ny - Nx) && r < (Nx * Ny)){
+            MatSetValue(A,r,r,-3,INSERT_VALUES);
+        }
         if(r<(Nx*Ny - Nx)){
-            MatSetValue(A,r,r+Nx,1,INSERT_VALUES);
+
             MatSetValue(A,r+Nx,r,1,INSERT_VALUES);
         }
     }
 
-
         /*USING MATSETVALUE FUNCTION, INSERT THE GOOD FACTOR AT THE GOOD PLACE*/
         /*Be careful; the solution from the system solved is defined within a constant.
         One point from Phi must then be set to an abritrary constant.*/
-    // printMat(N_row*N_row,N_col* N_col, matjk);
 }
 
 /*To call during the initialization of your solver, before the begin of the time loop*/
@@ -172,12 +183,19 @@ PetscErrorCode initialize_poisson_solver(Poisson_data* data, Problem *theProblem
     MatGetOwnershipRange(data->A, &rowStart, &rowEnd);
 
     computeLaplacianMatrix(data->A, theProblem);
+    printf("%s\n", "Laplacian matrix computed");
     ierr = MatAssemblyBegin(data->A, MAT_FINAL_ASSEMBLY);
 
     CHKERRQ(ierr);
     ierr = MatAssemblyEnd(data->A, MAT_FINAL_ASSEMBLY);
     CHKERRQ(ierr);
-    MatView(data->A,PETSC_VIEWER_STDOUT_WORLD);
+    // MatView(data->A,PETSC_VIEWER_STDOUT_WORLD);
+
+    // PetscViewer viewer;
+    // PetscViewerFormat format = PETSC_VIEWER_ASCII_DENSE;
+    // PetscOptionsGetViewer(PETSC_COMM_WORLD,NULL,NULL,"-myviewer",&viewer,&format,NULL);
+    // PetscViewerPushFormat(viewer, PETSC_VIEWER_ASCII_DENSE);
+    // MatView(data->A,viewer);
 
     /* Create the Krylov context */
     KSPCreate(PETSC_COMM_WORLD, &(data->sles));
@@ -205,3 +223,101 @@ void free_poisson_solver(Poisson_data* data){
     VecDestroy(&(data->x));
     KSPDestroy(&(data->sles));
 }
+
+// *This function is called only once during the simulation, i.e. in initialize_poisson_solver.*/
+/*In its current state, it inserts unity on the main diagonal.*/
+/*More than probably, you should need to add arguments to the prototype ... .*/
+/*Modification to do in this function : */
+/*   -Insert the correct factor in matrix A*/
+// void computeLaplacianMatrix(Mat A, Problem *theProblem){
+//
+//     int Nx = theProblem -> Nx;
+//     int Ny = theProblem -> Ny;
+//     MatSetValue(A,0,0,1,INSERT_VALUES); // Bottom left corner
+//     MatSetValue(A,Nx,0,1,INSERT_VALUES);
+//
+//     MatSetValue(A,Nx*Ny-1,Nx*Ny-1,-2,INSERT_VALUES);
+//     MatSetValue(A,Nx*Ny-1,Nx*Ny-2,1,INSERT_VALUES);
+//
+//     double **M = matrix(Nx * Ny, Nx * Ny);
+//     M[Nx*Ny-1][Nx*Ny-1] = -2;
+//     M[Nx*Ny-1][Nx*Ny-2] = 1;
+//
+//
+//     M[0][0] = 1;
+//     M[Nx][0] = 1;
+//
+//     for (int r = 1; r < Nx*Ny - 1; r++){
+//         MatSetValue(A,r,r,-4,INSERT_VALUES);
+//         MatSetValue(A,r,r+1,1,INSERT_VALUES);
+//         MatSetValue(A,r,r-1,1,INSERT_VALUES);
+//         M[r][r] = -4;
+//         M[r][r+1] = 1;
+//         M[r][r-1] = 1;
+//
+//         if (r<Nx-1){ // Bottom boundary
+//             MatSetValue(A,r,r,-3,INSERT_VALUES);
+//             MatSetValue(A,r,r+1,1,INSERT_VALUES);
+//             MatSetValue(A,r,r-1,1,INSERT_VALUES);
+//             M[r][r] = -3.0;
+//             M[r][r+1] = 1.0;
+//             M[r][r-1] = 1.0;
+//         }
+//         else if(r==Nx-1){ // Bottom right corner
+//             MatSetValue(A,r,r,-2,INSERT_VALUES);
+//             MatSetValue(A,r,r-1,1,INSERT_VALUES);
+//             MatSetValue(A,r,r+1,0,INSERT_VALUES);
+//             M[r][r] = -2;
+//             M[r][r-1] = 1;
+//             M[r][r+1] = 0;
+//         }
+//
+//         else if(r%Nx == 0){ // Left boundary
+//             if (r == (Nx*Ny)-Nx){ // Top left corner corner
+//                 MatSetValue(A,r,r,-2,INSERT_VALUES);
+//                 MatSetValue(A,r,r+1,1,INSERT_VALUES);
+//                 M[r][r] = -2;
+//                 M[r][r+1] = 1;
+//                 M[r][r-1] = 0;
+//             }
+//             else{
+//                 MatSetValue(A,r,r,-3,INSERT_VALUES);
+//                 MatSetValue(A,r,r+1,1,INSERT_VALUES);
+//                 M[r][r] = -3;
+//                 M[r][r+1] = 1;
+//             }
+//         }
+//
+//         else if ((r+1)%Nx == 0){ // Right boundary
+//             if(r==(Nx*Ny)-1){ // Top right corner
+//                 MatSetValue(A,r,r,-2,INSERT_VALUES);
+//                 MatSetValue(A,r,r-1,1,INSERT_VALUES);
+//                 M[r][r] = -2;
+//                 M[r][r-1] = 1;
+//             }
+//             else{
+//                 MatSetValue(A,r,r,-3,INSERT_VALUES);
+//                 MatSetValue(A,r,r-1,1,INSERT_VALUES);
+//                 M[r][r] = -3;
+//                 M[r][r-1] = 1;
+//             }
+//         }
+//
+//         if(r > (Nx*Ny - Nx) && r < (Nx * Ny)){
+//             MatSetValue(A,r,r,-3,INSERT_VALUES);
+//             M[r][r] = -3;
+//         }
+//         if(r<(Nx*Ny - Nx)){
+//
+//             MatSetValue(A,r+Nx,r,1,INSERT_VALUES);
+//             M[r][r+Nx] = 1;
+//             M[r+Nx][r] = 1;
+//         }
+//     }
+//     saveMatTest(Nx * Ny, Nx * Ny, M);
+//
+//     /*USING MATSETVALUE FUNCTION, INSERT THE GOOD FACTOR AT THE GOOD PLACE*/
+//     /*Be careful; the solution from the system solved is defined within a constant.
+//     One point from Phi must then be set to an abritrary constant.*/
+//     // printMat(N_row*N_row,N_col* N_col, matjk);
+// }

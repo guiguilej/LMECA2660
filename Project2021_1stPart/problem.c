@@ -21,17 +21,22 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->u_tau = theProblem->kappa * u_hill / log((h_hill + y0) / y0) / 3.6; // [m/s]
     theProblem->C = 0.5;
 
-    double h = 500;
-    // double h = h_hill / 40.0;
-    theProblem->h = h;                                                          // To change later
+    // double h = 500;
+    double h = h_hill / 40;
+    theProblem->h = h;
     int Nx = (int) theProblem->L / theProblem->h;
     int Ny = (int) theProblem->H / theProblem->h;
+
+    // int Nx = 4;
+    // int Ny = 3;
     theProblem->Nx = Nx;
     theProblem->Ny = Ny;
 
     double *rhs = (double*) calloc(Nx * Ny, sizeof(double));
+    double *x_poisson = (double*) calloc(Nx * Ny, sizeof(double));
     theProblem->rhs = rhs;
-    
+    theProblem->x_poisson = x_poisson;
+
     // For u and v, the first point of the mesh corresponds to the u and v which  get in the first cell
     // The addidtional points (of index 0) are thus the v's which lie on the bottom boundary and the u's
     // which lie on the left hand side boundary
@@ -392,3 +397,40 @@ void outFlow(Problem *theProblem){
         u_star[j][Nx-1] -= (massFlowOut - massFlowIn) / theProblem->H;
     }
 }
+
+// void mask(Problem *theProblem, ){
+//
+//     // Computes the mask along the x axis
+//     int Nx = theProblem->U->Nx;
+//     double h = theProblem->h;
+//     double d_hill = theProblem->d_hill;
+//     double sigma_hill = theProblem->sigma_hill;
+//
+//
+//     double *x = calloc(Nx, sizeof(double));
+//     double *y = calloc(Nx, sizeof(double));
+//     double *sigma_khi = calloc(Nx, sizeof(double));
+//
+//     for (int i = 0; i < Nx; i++)
+//     {
+//         x[i] = h * i;
+//         sigma_khi[i] = 2.0 * h * exp(- pow((x[i] - d_hill) / sigma_hill,2.0));
+//         y[i] = h_hill * exp(- pow(x[i] - d_hill,2.0) / pow(sigma, 2.0));
+//     }
+//
+//     for (int i = 0; i < Ny; i++)
+//     {
+//         double height = i * h;
+//         for (int j = 0; j < Nx; j++)
+//         {
+//             // printf("%f %f\n", h_hill, );
+//             if (y[j] >= height)
+//             {
+//                 mask[i][j] = 1.0;
+//             }
+//         }
+//     }
+
+    // Computes the mask along the y axis
+//     free(x);
+// }
