@@ -12,15 +12,18 @@ int main(int argc, char *argv[]){
     double u_hill = 50.0;
     double y0 = 0.1;
     // double t_max = 3.0;
-    double dt = 0.0001;
+    double dt = 0.001;
+    double dtau = dt / 2000.0;
     // int n_iter = (int)(t_max / dt);
-    int n_iter = 50;
+    int n_iter = 50001;
     // double Re = 100000000;
 
 
     Problem *theProblem;
     theProblem = initProblem(h_hill, u_hill, y0);
     theProblem->dt = dt;
+    theProblem->dtau = dtau;
+    theProblem->hill = 1;
     PetscInitialize(&argc, &argv, 0, 0);
     initialize_poisson_solver(&poisson_data, theProblem);
     printf("%s\n", "Poisson solver initialised");
@@ -42,6 +45,8 @@ int main(int argc, char *argv[]){
     Mesh *Phi = theProblem->phi;
     Mesh *Grad_phix = theProblem->grad_phix;
     Mesh *Grad_phiy = theProblem->grad_phiy;
+    Mesh *Ksi_u = theProblem->ksi_u;
+    Mesh *Ksi_v = theProblem->ksi_v;
 
 
     double **u = U->grid;
@@ -60,6 +65,8 @@ int main(int argc, char *argv[]){
     double **phi = Phi->grid;
     double **grad_phix = Grad_phix->grid;
     double **grad_phiy = Grad_phiy->grid;
+    double **ksi_u = Ksi_u->grid;
+    double **ksi_v = Ksi_v->grid;
 
 
     saveProblem(theProblem, fileProblem);
@@ -69,26 +76,65 @@ int main(int argc, char *argv[]){
 
     // ====================================================================== // Beginning of the first iteration
 
+
     boundaryConditions(theProblem);
+    // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v0", 0);
+    saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u0", 0);
+    // saveMat(theProblem->nu->Nx, theProblem->nu->Ny, theProblem->nu->grid, "w0", 0);
+    // saveMat(theProblem->p->Nx, theProblem->p->Ny, theProblem->p->grid, "p0", 0);
 
     // Computing the terms of the first step to get the v_star vector
     advective(theProblem);
     diffusive(theProblem);
     gradP(theProblem);
+    if (theProblem->hill == 1){
+        mask(theProblem);
+    }
+    saveMat(theProblem->ksi_u->Nx, theProblem->ksi_u->Ny, theProblem->ksi_u->grid, "ksi_u", 0);
+    saveMat(theProblem->ksi_v->Nx, theProblem->ksi_v->Ny, theProblem->ksi_v->grid, "ksi_v", 0);
 
+    // for(int j = 0; j < Grad_px->Ny; j ++){  // The reference indices are taken for grad_p
+    //     for(int i = 0; i < Grad_px->Nx; i ++){
+    //         u_star[j+1][i+1] = u[j+1][i+1] + dt * (- hx[j+1][i+1] + 2.0 * divx[j][i] - grad_px[j][i]);
+    //         hx_old[j+1][i+1] = hx[j+1][i+1];
+    //         u_star[j][0] = u[j][0];
+    //     }
+    // }
+    // u_star[0][0] = u[0][0];
+    // u_star[U->Ny-1][0] = u[U->Ny-1][0];
+    //
+    // for(int j = 0; j < Grad_py->Ny; j ++){
+    //     for(int i = 0; i < Grad_px->Nx; i ++){
+    //         v_star[j+1][i+1] = v[j+1][i+1] + dt * (- hx[j+1][i+1] + 2.0 * divy[j][i] - grad_py[j][i]);
+    //         hy_old[j+1][i+1] = hy[j+1][i+1];
+    //         v_star[j][0] = v[j][0];
+    //     }
+    // }
+    // v_star[0][0] = v[0][0];
+    // v_star[V->Ny-1][0] = v[V->Ny-1][0];
+
+    // Test for the mask function
     for(int j = 0; j < Grad_px->Ny; j ++){  // The reference indices are taken for grad_p
         for(int i = 0; i < Grad_px->Nx; i ++){
             u_star[j+1][i+1] = u[j+1][i+1] + dt * (- hx[j+1][i+1] + 2.0 * divx[j][i] - grad_px[j][i]);
+            u_star[j+1][i+1] /= (1.0 + dt / dtau * ksi_u[j+1][i+1]);
             hx_old[j+1][i+1] = hx[j+1][i+1];
         }
+        u_star[j][0] = u[j][0];
     }
+    u_star[0][0] = u[0][0];
+    u_star[U->Ny-1][0] = u[U->Ny-1][0];
 
     for(int j = 0; j < Grad_py->Ny; j ++){
         for(int i = 0; i < Grad_px->Nx; i ++){
             v_star[j+1][i+1] = v[j+1][i+1] + dt * (- hx[j+1][i+1] + 2.0 * divy[j][i] - grad_py[j][i]);
+            v_star[j+1][i+1] /= (1.0 + dt / dtau * ksi_v[j+1][i+1]);
             hy_old[j+1][i+1] = hy[j+1][i+1];
         }
+        v_star[j][0] = v[j][0];
     }
+    v_star[0][0] = v[0][0];
+    v_star[V->Ny-1][0] = v[V->Ny-1][0];
 
 
     // computeRHS(theProblem->rhs, theProblem);
@@ -100,7 +146,7 @@ int main(int argc, char *argv[]){
     // Insert poisson solver here
     poisson_solver(&poisson_data, theProblem);
     vecToMat(Phi, theProblem->x_poisson);  // x is the solution of the poisson equation
-    printf("%s\n", "Hey");
+
     // Computing grad_phi then updating v_n+1
     gradPhi(theProblem);
 
@@ -122,29 +168,31 @@ int main(int argc, char *argv[]){
             p[j][i] += phi[j][i];
         }
     }
+    // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", 0);
+    // saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", 0);
+    // saveMat(theProblem->nu->Nx, theProblem->nu->Ny, theProblem->nu->grid, "w", 0);
+    // saveMat(theProblem->p->Nx, theProblem->p->Ny, theProblem->p->grid, "p", 0);
 
     // ====================================================================== // End of the first iteration
-
-
-    // printf("Size of u: (%d, %d)\n", theProblem->u->Nx, theProblem->u->Ny);
-    // printf("Size of v: (%d, %d)\n", theProblem->v->Nx, theProblem->v->Ny);
-    // printf("Size of nu: (%d, %d)\n", theProblem->nu->Nx, theProblem->nu->Ny);
-    // printf("Number of iterations %d\n", n_iter);
 
     // ====================================================================== // Time loop
 
     for(int it = 1; it < n_iter; it++){
         boundaryConditions(theProblem);
         theProblem->it = it;
+        printf("Iteration : %d\n", it);
 
         // Computing the terms of the first step to get the v_star vector
         advective(theProblem);
         diffusive(theProblem);
         gradP(theProblem);
 
+        // saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", it);
+
         for(int j = 0; j < Grad_px->Ny; j ++){  // The reference indices are taken for grad_p
             for(int i = 0; i < Grad_px->Nx; i ++){
                 u_star[j+1][i+1] = u[j+1][i+1] + dt * (- (1.5 * hx[j+1][i+1] - 0.5 * hx_old[j+1][i+1]) + 2.0 * divx[j][i] - grad_px[j][i]);
+                u_star[j+1][i+1] /= (1.0 + dt / dtau * ksi_u[j+1][i+1]);
                 hx_old[j+1][i+1] = hx[j+1][i+1];
             }
         }
@@ -152,6 +200,7 @@ int main(int argc, char *argv[]){
         for(int j = 0; j < Grad_py->Ny; j ++){
             for(int i = 0; i < Grad_px->Nx; i ++){
                 v_star[j+1][i+1] = v[j+1][i+1] + dt * (- (1.5 * hy[j+1][i+1] - 0.5 * hy_old[j+1][i+1]) + 2.0 * divy[j][i] - grad_py[j][i]);
+                v_star[j+1][i+1] /= (1.0 + dt / dtau * ksi_v[j+1][i+1]);
                 hy_old[j+1][i+1] = hy[j+1][i+1];
             }
         }
@@ -189,21 +238,22 @@ int main(int argc, char *argv[]){
                 p[j][i] += phi[j][i];
             }
         }
-        if(it % 10 == 0){
+        if(it % 1000 == 0){
             vorticity(theProblem);
+            saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", it);
             saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", it);
-            // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", it);
-            // saveMat(theProblem->Hx->Nx, theProblem->Hx->Ny, theProblem->Hx->grid, "Hx", it);
-            // saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", it);
-            saveMat(theProblem->nu->Nx, theProblem->nu->Ny, theProblem->nu->grid, "w", it);
+            saveMat(theProblem->w->Nx, theProblem->w->Ny, theProblem->w->grid, "w", it);
+            saveMat(theProblem->p->Nx, theProblem->p->Ny, theProblem->p->grid, "p", it);
         }
+
+        // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", it);
+        // saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", it);
+        // saveMat(theProblem->nu->Nx, theProblem->nu->Ny, theProblem->nu->grid, "w", it);
+        // saveMat(theProblem->p->Nx, theProblem->p->Ny, theProblem->p->grid, "p", it);
+
+
     }
 
-    // saveMat(theProblem->u->Nx, theProblem->u->Ny, theProblem->u->grid, "u", theProblem->it);
-    // saveMat(theProblem->v->Nx, theProblem->v->Ny, theProblem->v->grid, "v", theProblem->it);
-    // saveMat(theProblem->Hx->Nx, theProblem->Hx->Ny, theProblem->Hx->grid, "Hx", theProblem->it);
-    // saveMat(theProblem->Hy->Nx, theProblem->Hy->Ny, theProblem->Hy->grid, "Hy", theProblem->it);
-    saveMat(theProblem->nu->Nx, theProblem->nu->Ny, theProblem->nu->grid, "w", theProblem->it);
     freeProblem(theProblem);
 
     PetscFinalize();

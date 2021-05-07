@@ -52,7 +52,7 @@ void saveProblem(Problem *theProblem, char *filename){
 }
 
 void saveMat(int Nx, int Ny, double **mat, char *name, int it){
-    char *basename = "/mnt/d/cours/Q8/LMECA2660/Project/Data/Results/%s_%d.txt";
+    char *basename = "/mnt/d/cours/Q8/LMECA2660/Project/Data/Results2/%s_%d.txt";
     char filename[100];
     sprintf(filename, basename, name, it);
     printf("Writing in file: %s\n", filename);

@@ -37,6 +37,8 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->rhs = rhs;
     theProblem->x_poisson = x_poisson;
 
+    printf("%d %d\n", Nx, Ny);
+
     // For u and v, the first point of the mesh corresponds to the u and v which  get in the first cell
     // The addidtional points (of index 0) are thus the v's which lie on the bottom boundary and the u's
     // which lie on the left hand side boundary
@@ -61,6 +63,8 @@ Problem *initProblem(double h_hill, double u_hill, double y0){
     theProblem->grad_phiy = initMesh(Nx, Ny-1, h);
     theProblem->divx = initMesh(Nx+1, Ny+1, h);
     theProblem->divy = initMesh(Nx+1, Ny+1, h);
+    theProblem->ksi_u = initMesh(Nx+1, Ny+2, h);
+    theProblem->ksi_v = initMesh(Nx+2, Ny+1, h);
     theProblem->w = initMesh(Nx+1, Ny+1, h);
 
     return theProblem;
@@ -73,7 +77,6 @@ double *initU_p(Problem *theProblem){
     for(int j = 1; j < theProblem->u->Ny - 1; j++){
         double y = h / 2.0 + (j - 1) * h;
         u_p[j] = theProblem->u_tau / theProblem->kappa * log((y + theProblem->y0) / theProblem->y0);
-        theProblem->massFlow += u_p[j] * h;
     }
     return u_p;
 }
@@ -157,6 +160,8 @@ void freeProblem(Problem *theProblem){
     freeMesh(theProblem->grad_phiy);
     freeMesh(theProblem->divx);
     freeMesh(theProblem->divy);
+    freeMesh(theProblem->ksi_u);
+    freeMesh(theProblem->ksi_v);
     freeMesh(theProblem->w);
     free(theProblem);
 }
@@ -398,39 +403,44 @@ void outFlow(Problem *theProblem){
     }
 }
 
-// void mask(Problem *theProblem, ){
-//
-//     // Computes the mask along the x axis
-//     int Nx = theProblem->U->Nx;
-//     double h = theProblem->h;
-//     double d_hill = theProblem->d_hill;
-//     double sigma_hill = theProblem->sigma_hill;
-//
-//
-//     double *x = calloc(Nx, sizeof(double));
-//     double *y = calloc(Nx, sizeof(double));
-//     double *sigma_khi = calloc(Nx, sizeof(double));
-//
-//     for (int i = 0; i < Nx; i++)
-//     {
-//         x[i] = h * i;
-//         sigma_khi[i] = 2.0 * h * exp(- pow((x[i] - d_hill) / sigma_hill,2.0));
-//         y[i] = h_hill * exp(- pow(x[i] - d_hill,2.0) / pow(sigma, 2.0));
-//     }
-//
-//     for (int i = 0; i < Ny; i++)
-//     {
-//         double height = i * h;
-//         for (int j = 0; j < Nx; j++)
-//         {
-//             // printf("%f %f\n", h_hill, );
-//             if (y[j] >= height)
-//             {
-//                 mask[i][j] = 1.0;
-//             }
-//         }
-//     }
+void mask(Problem *theProblem){
+   Mesh *Ksi_u = theProblem->ksi_u;
+   Mesh *Ksi_v = theProblem->ksi_v;
+   double** ksi_u = Ksi_u->grid;
+   double** ksi_v = Ksi_v->grid;
 
-    // Computes the mask along the y axis
-//     free(x);
-// }
+   double sigma_ksi_u ;
+   double sigma_ksi_v ;
+   double sigma_hill = theProblem->sigma_hill;
+   double h = theProblem -> h;
+   double x_map_u;
+   double y_map_u;
+   double x_map_v;
+   double y_map_v;
+
+
+   double y_hill(double x, Problem *theProblem){
+       double height;
+       height = theProblem->h_hill * exp(- 0.5 * pow((x-theProblem->d_hill)/(sigma_hill),2));
+       return height;
+   }
+
+   // Mask for the u values
+   for(int j = 0; j < theProblem->u->Ny; j++){
+       y_map_u = - 0.5 * h + (double) j * h;
+       for(int i = 0; i < theProblem->u->Nx; i++){
+           x_map_u = (double)i*h;
+           sigma_ksi_u = 2.0 * h * exp(-pow(((x_map_u - theProblem->d_hill) / sigma_hill), 2));
+           ksi_u[j][i] = 0.5 * (1.0 - erf((y_map_u - y_hill(x_map_u,theProblem)) / sigma_ksi_u));
+       }
+    }
+    // Mask for the v values
+    for(int j = 0; j < theProblem->v->Ny; j++){
+        y_map_v = (double) (j * h);
+        for(int i = 0; i < theProblem->v->Nx; i++){
+            x_map_v = - 0.5 * h + (double)i*h;
+            sigma_ksi_v = 2.0*h*exp(-pow(((x_map_v-theProblem->d_hill)/sigma_hill),2));
+            ksi_v[j][i] = 0.5*(1.0-erf((y_map_v-y_hill(x_map_v,theProblem))/sigma_ksi_v));
+        }
+     }
+}

@@ -33,14 +33,19 @@ void computeRHS(double *rhs, Problem* theProblem){
       u_star[j][U_star->Nx-1] += cor;
     }
 
+    // printf("%s\n", "==============================");
+    // printf("Iteration %d\n", theProblem->it);
+    // printf("Inflow %f\n", IntegralUin);
+    // printf("Outflow %f\n", IntegralUout);
+    // printf("%s\n", "==============================");
 
     for(int j = 0; j < Ny-1; j++){
         for(int i = 0; i < Nx-1; i++){
-            rhs[j*Nx + i] = (h / dt) * (u_star[j][i+1] - u_star[j][i] + v_star[j+1][i] - v_star[j][i]);
+            rhs[j*Nx + i] = (h / dt) * (u_star[j+1][i+1] - u_star[j+1][i] + v_star[j+1][i+1] - v_star[j][i+1]);
         }
     }
 
-    rhs[0]=0;
+    rhs[0]=1.0;
 }
 
 /*To call at each time step after computation of U_star. This function solves the poisson equation*/
@@ -72,7 +77,7 @@ void poisson_solver(Poisson_data *data, Problem* theProblem){
     // VecView(x, PETSC_VIEWER_STDOUT_WORLD);
     KSPGetIterationNumber(sles, &its);
 
-    PetscPrintf(PETSC_COMM_WORLD, "Solution to Poisson eqn in %d iterations \n", its);
+    // PetscPrintf(PETSC_COMM_WORLD, "Solution to Poisson eqn in %d iterations \n", its);
     VecGetArray(x, &sol);
     // printf("%s\n", "hey");
 
@@ -121,6 +126,7 @@ void computeLaplacianMatrix(Mat A, Problem *theProblem){
             if (r == (Nx*Ny)-Nx){ // Top left corner corner
                 MatSetValue(A,r,r,-2,INSERT_VALUES);
                 MatSetValue(A,r,r+1,1,INSERT_VALUES);
+                MatSetValue(A,r,r-1,0,INSERT_VALUES);
             }
             else{
                 MatSetValue(A,r,r,-3,INSERT_VALUES);
@@ -136,6 +142,7 @@ void computeLaplacianMatrix(Mat A, Problem *theProblem){
             else{
                 MatSetValue(A,r,r,-3,INSERT_VALUES);
                 MatSetValue(A,r,r-1,1,INSERT_VALUES);
+                MatSetValue(A,r,r+1,0,INSERT_VALUES);
             }
         }
 
@@ -276,6 +283,7 @@ void free_poisson_solver(Poisson_data* data){
 //             if (r == (Nx*Ny)-Nx){ // Top left corner corner
 //                 MatSetValue(A,r,r,-2,INSERT_VALUES);
 //                 MatSetValue(A,r,r+1,1,INSERT_VALUES);
+//                 MatSetValue(A,r,r-1,0,INSERT_VALUES); // ==========================
 //                 M[r][r] = -2;
 //                 M[r][r+1] = 1;
 //                 M[r][r-1] = 0;
@@ -284,6 +292,8 @@ void free_poisson_solver(Poisson_data* data){
 //                 MatSetValue(A,r,r,-3,INSERT_VALUES);
 //                 MatSetValue(A,r,r+1,1,INSERT_VALUES);
 //                 M[r][r] = -3;
+//                 M[r][r-1] = 0;
+//
 //                 M[r][r+1] = 1;
 //             }
 //         }
@@ -292,14 +302,18 @@ void free_poisson_solver(Poisson_data* data){
 //             if(r==(Nx*Ny)-1){ // Top right corner
 //                 MatSetValue(A,r,r,-2,INSERT_VALUES);
 //                 MatSetValue(A,r,r-1,1,INSERT_VALUES);
+//
 //                 M[r][r] = -2;
 //                 M[r][r-1] = 1;
+//
 //             }
 //             else{
 //                 MatSetValue(A,r,r,-3,INSERT_VALUES);
 //                 MatSetValue(A,r,r-1,1,INSERT_VALUES);
+//                 MatSetValue(A,r,r+1,0,INSERT_VALUES); // ===================
 //                 M[r][r] = -3;
 //                 M[r][r-1] = 1;
+//                 M[r][r+1] = 0;
 //             }
 //         }
 //

@@ -29,6 +29,7 @@ typedef struct{
     double *u_p;
     double *rhs;
     double *x_poisson;
+    int hill;
 
     double dt;
     double dtau;
@@ -61,6 +62,8 @@ typedef struct{
     Mesh *grad_py;
     Mesh *grad_phix;
     Mesh *grad_phiy;
+    Mesh *ksi_u;
+    Mesh *ksi_v;
 } Problem;
 
 
